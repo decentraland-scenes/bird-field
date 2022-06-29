@@ -1,5 +1,8 @@
 let birdShape = new GLTFShape('models/bird.glb')
 let birdFlyShape = new GLTFShape('models/bird_fly.glb')
+let sandShape = new GLTFShape('models/sand.glb')
+
+let physicsCast = PhysicsCast.instance
 
 // preload the animated bird glb (underground), for faster loading
 const birdPreloadDummy = new Entity()      
@@ -10,6 +13,16 @@ birdPreloadDummy.addComponent(new Transform({
         }))        
 birdPreloadDummy.addComponent(birdFlyShape )               
 engine.addEntity(birdPreloadDummy)
+
+// Add ground terrain
+const sand = new Entity()      
+sand.addComponent(new Transform({ 
+          position: new Vector3(0,0,0),
+          rotation: Quaternion.Euler(0,0,0),
+          scale: new Vector3(1,1,1)
+        }))        
+sand.addComponent(sandShape )               
+engine.addEntity(sand)
 
 @Component("DistanceBird")
 export class DistanceBird {  
@@ -41,6 +54,7 @@ class ProximitySystem {
   amplitude:number = 1  
   group = engine.getComponentGroup(Transform, DistanceBird)
   elapsed:number = 0
+
   update(dt: number) {
 
     for (let bird of this.group.entities){
@@ -58,7 +72,8 @@ class ProximitySystem {
           bird.addComponentOrReplace(birdFlyShape)
         }
        
-        transform.position = birdInfo.originalPos.add(playerDir.multiplyByFloats(multiplier, -4*multiplier, multiplier))
+        transform.position = birdInfo.originalPos.add(playerDir.multiplyByFloats(multiplier, 0, multiplier))
+        transform.position.y = birdInfo.originalPos.y + 6*multiplier
         birdInfo.elapsed +=dt
         transform.position.x += Math.sin( birdInfo.elapsed *10) * multiplier
         transform.position.y += Math.sin( birdInfo.elapsed *8)* multiplier
@@ -72,9 +87,7 @@ class ProximitySystem {
         }
         transform.position.copyFrom(birdInfo.originalPos)
         
-        
       }
-
     }
   }
 }
@@ -90,15 +103,18 @@ class BirdController{
   cols:number = 10
   spacing:number = this.sideLength/this.rows
   base:Vector3 = new Vector3(14,0,14)
+  birdPositions:Vector3[]
 
   constructor(){
     this.birds =  []
+    this.birdPositions =  []
     this.center = new Vector3(24,0,24)
-    this.addBirds()
+    
+    
   }
 
-  addBirds(){
-    
+  generatePositions(){
+
     for(let i=0; i< this.rows; i++){
       for(let j=0; j< this.cols; j++){     
 
@@ -107,29 +123,69 @@ class BirdController{
           this.base.y , 
           this.base.z  + j * this.spacing + Math.random()*20-10) 
 
-        const bird = new Entity()      
-        bird.addComponent(new Transform({ 
-          position: new Vector3(
-            newPos.x, 
-            newPos.y, 
-            newPos.z),
-            rotation: Quaternion.Euler(0, Math.random()*360,0) 
-        }))        
-        bird.addComponent(new DistanceBird(
-          new Vector3(
-            newPos.x, 
-            newPos.y, 
-            newPos.z),
-            newPos.subtract(this.center)
-        ))    
+          let rayDown: Ray = {
+            origin: new Vector3(newPos.x, 20, newPos.z),
+            direction: Vector3.Down(),
+            distance: 22,
+          }
+
+          physicsCast.hitFirst(
+            rayDown,
+            (e) => {
+              if(e.didHit){          
+                
+                newPos.y = e.hitPoint.y 
+                this.birdPositions.push(newPos) 
+                const bird = new Entity()      
+                bird.addComponent(new Transform({ 
+                  position: newPos,
+                    rotation: Quaternion.Euler(0, Math.random()*360,0) 
+                }))        
+                bird.addComponent(new DistanceBird(
+                  newPos,
+                  Vector3.Up()
+                ))          
+                
+                bird.addComponent(birdShape )             
+                engine.addEntity(bird)    
+              }        
+            }            
+          )
+
+          
+
         
-        bird.addComponent(birdShape )             
-        engine.addEntity(bird)
       }
     }
+  }
+
+  addBirds(){
+    
+    for(let i=0; i< this.birdPositions.length; i++){
+
+      log("birdPos: " + this.birdPositions[i])
+      const bird = new Entity()      
+      bird.addComponent(new Transform({ 
+        position: this.birdPositions[i],
+          rotation: Quaternion.Euler(0, Math.random()*360,0) 
+      }))        
+      bird.addComponent(new DistanceBird(
+        this.birdPositions[i],
+        Vector3.Up()
+      ))          
+      
+      bird.addComponent(birdShape )             
+      engine.addEntity(bird)     
+    }  
+    
 
   }
 }
 
 let birdControl = new BirdController()
+
+onSceneReadyObservable.add(()=>{
+  birdControl.generatePositions()
+  birdControl.addBirds()
+})
 

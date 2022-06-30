@@ -1,4 +1,4 @@
-# Bird Scaring
+# Bird Field
 _demo of the bird scaring scene running in preview._
 
 ![demo](https://github.com/decentraland-scenes/bird-field/blob/main/screenshots/bird.gif)
